@@ -91,12 +91,12 @@ namespace Microsoft.SRM
                     return "Boundary";
                 case RegexNode.Nothing:
                     return "Nothing";
-                case RegexNode.Nonboundary:
+                case RegexNode.NonBoundary:
                     return "Nonboundary";
                 case RegexNode.NonECMABoundary:
                     return "NonECMABoundary";
-                case RegexNode.Greedy:
-                    return "Greedy";
+                case RegexNode.Atomic:
+                    return "Atomic";
                 case RegexNode.Group:
                     return "Group";
                 case RegexNode.Lazyloop:

@@ -1,100 +1,257 @@
-//------------------------------------------------------------------------------
-// <copyright file="RegexReplacement.cs" company="Microsoft">
-//     Copyright (c) Microsoft Corporation.  All rights reserved.
-// </copyright>                                                                
-//------------------------------------------------------------------------------
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
-// The RegexReplacement class represents a substitution string for
-// use when using regexs to search/replace, etc. It's logically
-// a sequence intermixed (1) constant strings and (2) group numbers.
+using System.Collections;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
-namespace System.Text.RegularExpressions {
+namespace System.Text.RegularExpressions
+{
+    /// <summary>
+    /// The RegexReplacement class represents a substitution string for
+    /// use when using regexes to search/replace, etc. It's logically
+    /// a sequence intermixed (1) constant strings and (2) group numbers.
+    /// </summary>
+    internal sealed class RegexReplacement
+    {
+        // Constants for special insertion patterns
+        private const int Specials = 4;
+        public const int LeftPortion = -1;
+        public const int RightPortion = -2;
+        public const int LastGroup = -3;
+        public const int WholeString = -4;
 
-    using System.Collections;
-    using System.Collections.Generic;
+        private readonly string[] _strings; // table of string constants
+        private readonly int[] _rules;      // negative -> group #, positive -> string #
 
-    internal sealed class RegexReplacement {
-        /*
-         * Since RegexReplacement shares the same parser as Regex,
-         * the constructor takes a RegexNode which is a concatenation
-         * of constant strings and backreferences.
-         */
-#if SILVERLIGHT
-        internal RegexReplacement(String rep, RegexNode concat, Dictionary<Int32, Int32> _caps) {
-#else
-        internal RegexReplacement(String rep, RegexNode concat, Hashtable _caps) {
-#endif
-            StringBuilder sb;
-            List<String> strings;
-            List<Int32> rules;
-            int slot;
+        /// <summary>
+        /// Since RegexReplacement shares the same parser as Regex,
+        /// the constructor takes a RegexNode which is a concatenation
+        /// of constant strings and backreferences.
+        /// </summary>
+        public RegexReplacement(string rep, RegexNode concat, Hashtable _caps)
+        {
+            if (concat.Type != RegexNode.Concatenate)
+            {
+                throw ThrowHelper.CreateArgumentException(ExceptionResource.ReplacementError);
+            }
 
-            _rep = rep;
+            Span<char> vsbStack = stackalloc char[256];
+            var vsb = new ValueStringBuilder(vsbStack);
+            FourStackStrings stackStrings = default;
+            var strings = new ValueListBuilder<string>(MemoryMarshal.CreateSpan(ref stackStrings.Item1!, 4));
+            var rules = new ValueListBuilder<int>(stackalloc int[64]);
 
-            if (concat.Type() != RegexNode.Concatenate)
-                throw new ArgumentException(SR.GetString(SR.ReplacementError));
-
-            sb = new StringBuilder();
-            strings = new List<String>();
-            rules = new List<Int32>();
-
-            for (int i = 0; i < concat.ChildCount(); i++) {
+            int childCount = concat.ChildCount();
+            for (int i = 0; i < childCount; i++)
+            {
                 RegexNode child = concat.Child(i);
 
-                switch (child.Type()) {
+                switch (child.Type)
+                {
                     case RegexNode.Multi:
-                        sb.Append(child._str);
+                        vsb.Append(child.Str!);
                         break;
+
                     case RegexNode.One:
-                        sb.Append(child._ch);
+                        vsb.Append(child.Ch);
                         break;
+
                     case RegexNode.Ref:
-                        if (sb.Length > 0) {
-                            rules.Add(strings.Count);
-                            strings.Add(sb.ToString());
-                            sb.Length = 0;
+                        if (vsb.Length > 0)
+                        {
+                            rules.Append(strings.Length);
+                            strings.Append(vsb.ToString());
+                            vsb = new ValueStringBuilder(vsbStack);
                         }
-                        slot = child._m;
+                        int slot = child.M;
 
                         if (_caps != null && slot >= 0)
-                            slot = (int)_caps[slot];
+                        {
+                            slot = (int)_caps[slot]!;
+                        }
 
-                        rules.Add(-Specials - 1 - slot);
+                        rules.Append(-Specials - 1 - slot);
                         break;
+
                     default:
-                        throw new ArgumentException(SR.GetString(SR.ReplacementError));
+                        throw ThrowHelper.CreateArgumentException(ExceptionResource.ReplacementError);
                 }
             }
 
-            if (sb.Length > 0) {
-                rules.Add(strings.Count);
-                strings.Add(sb.ToString());
+            if (vsb.Length > 0)
+            {
+                rules.Append(strings.Length);
+                strings.Append(vsb.ToString());
             }
 
-            _strings = strings; 
-            _rules = rules; 
+            Pattern = rep;
+            _strings = strings.AsSpan().ToArray();
+            _rules = rules.AsSpan().ToArray();
+
+            rules.Dispose();
         }
 
-        internal String _rep;
-        internal List<String>  _strings;          // table of string constants
-        internal List<Int32>  _rules;            // negative -> group #, positive -> string #
+        /// <summary>Simple struct of four strings.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FourStackStrings // used to do the equivalent of: Span<string> strings = stackalloc string[4];
+        {
+            public string Item1;
+            public string Item2;
+            public string Item3;
+            public string Item4;
+        }
 
-        // constants for special insertion patterns
+        /// <summary>
+        /// Either returns a weakly cached RegexReplacement helper or creates one and caches it.
+        /// </summary>
+        /// <returns></returns>
+        public static RegexReplacement GetOrCreate(WeakReference<RegexReplacement> replRef, string replacement, Hashtable caps,
+            int capsize, Hashtable capnames, RegexOptions roptions)
+        {
+            RegexReplacement? repl;
 
-        internal const int Specials       = 4;
-        internal const int LeftPortion    = -1;
-        internal const int RightPortion   = -2;
-        internal const int LastGroup      = -3;
-        internal const int WholeString    = -4;
-
-        /*
-         * The original pattern string
-         */
-        internal String Pattern {
-            get {
-                return _rep;
+            if (!replRef.TryGetTarget(out repl) || !repl.Pattern.Equals(replacement))
+            {
+                repl = RegexParser.ParseReplacement(replacement, roptions, caps, capsize, capnames);
+                replRef.SetTarget(repl);
             }
+
+            return repl;
         }
+
+        /// <summary>The original pattern string</summary>
+        public string Pattern { get; }
+
+        ///// <summary>
+        ///// Given a Match, emits into the StringBuilder the evaluated
+        ///// substitution pattern.
+        ///// </summary>
+        //public void ReplacementImpl(ref SegmentStringBuilder segments, Microsoft.SRM.Match match)
+        //{
+        //    foreach (int rule in _rules)
+        //    {
+        //        // Get the segment to add.
+        //        ReadOnlyMemory<char> segment =
+        //            rule >= 0 ? _strings[rule].AsMemory() : // string lookup
+        //            rule < -Specials ? match.GroupToStringImpl(-Specials - 1 - rule) : // group lookup
+        //            (-Specials - 1 - rule) switch // special insertion patterns
+        //            {
+        //                LeftPortion => match.GetLeftSubstring(),
+        //                RightPortion => match.GetRightSubstring(),
+        //                LastGroup => match.LastGroupToStringImpl(),
+        //                WholeString => match.Text.AsMemory(),
+        //                _ => default
+        //            };
+
+        //        // Add the segment if it's not empty.  A common case for it being empty
+        //        // is if the developer is using Regex.Replace as a way to implement
+        //        // Regex.Remove, where the replacement string is empty.
+        //        if (segment.Length != 0)
+        //        {
+        //            segments.Add(segment);
+        //        }
+        //    }
+        //}
+
+        ///// <summary>
+        ///// Given a Match, emits into the builder the evaluated
+        ///// Right-to-Left substitution pattern.
+        ///// </summary>
+        //public void ReplacementImplRTL(ref SegmentStringBuilder segments, Match match)
+        //{
+        //    for (int i = _rules.Length - 1; i >= 0; i--)
+        //    {
+        //        int rule = _rules[i];
+
+        //        ReadOnlyMemory<char> segment =
+        //            rule >= 0 ? _strings[rule].AsMemory() : // string lookup
+        //            rule < -Specials ? match.GroupToStringImpl(-Specials - 1 - rule) : // group lookup
+        //            (-Specials - 1 - rule) switch // special insertion patterns
+        //            {
+        //                LeftPortion => match.GetLeftSubstring(),
+        //                RightPortion => match.GetRightSubstring(),
+        //                LastGroup => match.LastGroupToStringImpl(),
+        //                WholeString => match.Text.AsMemory(),
+        //                _ => default
+        //            };
+
+        //        // Add the segment to the list if it's not empty.  A common case for it being
+        //        // empty is if the developer is using Regex.Replace as a way to implement
+        //        // Regex.Remove, where the replacement string is empty.
+        //        if (segment.Length != 0)
+        //        {
+        //            segments.Add(segment);
+        //        }
+        //    }
+        //}
+
+        /// <summary>
+        /// Replaces all occurrences of the regex in the string with the
+        /// replacement pattern.
+        ///
+        /// Note that the special case of no matches is handled on its own:
+        /// with no matches, the input string is returned unchanged.
+        /// The right-to-left case is split out because StringBuilder
+        /// doesn't handle right-to-left string building directly very well.
+        /// </summary>
+        //public string Replace(Regex regex, string input, int count, int startat)
+        //{
+        //    if (count < -1)
+        //    {
+        //        ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.count, ExceptionResource.CountTooSmall);
+        //    }
+        //    if ((uint)startat > (uint)input.Length)
+        //    {
+        //        ThrowHelper.ThrowArgumentOutOfRangeException(ExceptionArgument.startat, ExceptionResource.BeginIndexNotNegative);
+        //    }
+
+        //    if (count == 0)
+        //    {
+        //        return input;
+        //    }
+
+        //    var state = (replacement: this, segments: SegmentStringBuilder.Create(), inputMemory: input.AsMemory(), prevat: 0, count);
+
+        //    if (!regex.RightToLeft)
+        //    {
+        //        regex.Run(input, startat, ref state, (ref (RegexReplacement thisRef, SegmentStringBuilder segments, ReadOnlyMemory<char> inputMemory, int prevat, int count) state, Match match) =>
+        //        {
+        //            state.segments.Add(state.inputMemory.Slice(state.prevat, match.Index - state.prevat));
+        //            state.prevat = match.Index + match.Length;
+        //            state.thisRef.ReplacementImpl(ref state.segments, match);
+        //            return --state.count != 0;
+        //        }, reuseMatchObject: true);
+
+        //        if (state.segments.Count == 0)
+        //        {
+        //            return input;
+        //        }
+
+        //        state.segments.Add(state.inputMemory.Slice(state.prevat, input.Length - state.prevat));
+        //    }
+        //    else
+        //    {
+        //        state.prevat = input.Length;
+
+        //        regex.Run(input, startat, ref state, (ref (RegexReplacement thisRef, SegmentStringBuilder segments, ReadOnlyMemory<char> inputMemory, int prevat, int count) state, Match match) =>
+        //        {
+        //            state.segments.Add(state.inputMemory.Slice(match.Index + match.Length, state.prevat - match.Index - match.Length));
+        //            state.prevat = match.Index;
+        //            state.thisRef.ReplacementImplRTL(ref state.segments, match);
+        //            return --state.count != 0;
+        //        }, reuseMatchObject: true);
+
+        //        if (state.segments.Count == 0)
+        //        {
+        //            return input;
+        //        }
+
+        //        state.segments.Add(state.inputMemory.Slice(0, state.prevat));
+        //        state.segments.AsSpan().Reverse();
+        //    }
+
+        //    return state.segments.ToString();
+        //}
     }
-
 }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants>UNSAFE</DefineConstants>
     <PackageId>Microsoft.Automata.SRM</PackageId>
@@ -12,6 +12,7 @@
     <Description>High-performance .NET regex engine with predictable performance</Description>
     <PackageTags>regular expression regex matching unicode</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
+    <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="$(BuildType)==Official">
@@ -32,6 +33,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="icon.png" Pack="true" PackagePath=""/>
+    <None Include="icon.png" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

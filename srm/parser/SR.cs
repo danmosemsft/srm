@@ -1,50 +1,144 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
-namespace System.Text.RegularExpressions  
+#nullable enable
+using System.Resources;
+using System.Runtime.CompilerServices;
+
+namespace System
 {
-    static class SR
+    internal partial class SR
     {
-        public static string GetString(string s, params object[] o)
+#if (!NETSTANDARD1_0 && !NETSTANDARD1_1 && !NET45) // AppContext is not supported on < NetStandard1.3 or < .NET Framework 4.5
+        private static readonly bool s_usingResourceKeys = AppContext.TryGetSwitch("System.Resources.UseSystemResourceKeys", out bool usingResourceKeys) ? usingResourceKeys : false;
+#endif
+
+        // This method is used to decide if we need to append the exception message parameters to the message when calling SR.Format.
+        // by default it returns the value of System.Resources.UseSystemResourceKeys AppContext switch or false if not specified.
+        // Native code generators can replace the value this returns based on user input at the time of native code generation.
+        // The Linker is also capable of replacing the value of this method when the application is being trimmed.
+        private static bool UsingResourceKeys() =>
+#if (!NETSTANDARD1_0 && !NETSTANDARD1_1 && !NET45) // AppContext is not supported on < NetStandard1.3 or < .NET Framework 4.5
+            s_usingResourceKeys;
+#else
+            false;
+#endif
+
+        internal static string GetResourceString(string resourceKey, string? defaultString = null)
         {
-            return s;
+            if (UsingResourceKeys())
+            {
+                return defaultString ?? resourceKey;
+            }
+
+            string? resourceString = null;
+            try
+            {
+                resourceString =
+#if SYSTEM_PRIVATE_CORELIB
+                    InternalGetResourceString(resourceKey);
+#else
+                    ResourceManager.GetString(resourceKey);
+#endif
+            }
+            catch (MissingManifestResourceException) { }
+
+            if (defaultString != null && resourceKey.Equals(resourceString))
+            {
+                return defaultString;
+            }
+
+            return resourceString!; // only null if missing resources
         }
 
-        public const string ReplacementError = "ReplacementError";
-        public const string UnexpectedOpcode = "UnexpectedOpcode";
-        public const string TooManyParens = "TooManyParens";
-        public const string NestedQuantify = "NestedQuantify";
-        public const string QuantifyAfterNothing = "QuantifyAfterNothing";
-        public const string InternalError = "InternalError";
-        public const string IllegalRange = "IllegalRange";
-        public const string NotEnoughParens = "NotEnoughParens";
-        public const string BadClassInCharRange = "BadClassInCharRange";
-        public const string SubtractionMustBeLast = "SubtractionMustBeLast";
-        public const string ReversedCharRange = "ReversedCharRange";
-        public const string UnterminatedBracket = "UnterminatedBracket";
-        public const string InvalidGroupName = "InvalidGroupName";
-        public const string CapnumNotZero = "CapnumNotZero";
-        public const string UndefinedBackref = "UndefinedBackref";
-        public const string MalformedReference = "MalformedReference";
-        public const string AlternationCantHaveComment = "AlternationCantHaveComment";
-        public const string AlternationCantCapture = "AlternationCantCapture";
-        public const string UnrecognizedGrouping = "UnrecognizedGrouping";
-        public const string IllegalEndEscape = "IllegalEndEscape";
-        public const string CaptureGroupOutOfRange = "CaptureGroupOutOfRange";
-        public const string TooFewHex = "TooFewHex";
-        public const string MissingControl = "MissingControl";
-        public const string UnrecognizedControl = "UnrecognizedControl";
-        public const string UnrecognizedEscape = "UnrecognizedEscape";
-        public const string IncompleteSlashP = "IncompleteSlashP";
-        public const string MalformedSlashP = "MalformedSlashP";
-        public const string IllegalCondition = "IllegalCondition";
-        public const string TooManyAlternates = "TooManyAlternates";
-        public const string MakeException = "MakeException";
-        public const string UndefinedNameRef = "UndefinedNameRef";
-        public const string UndefinedReference = "UndefinedReference";
-        public const string UnterminatedComment = "UnterminatedComment";
-        public const string MalformedNameRef = "MalformedNameRef";
-        public const string UnknownProperty = "UnknownProperty";
-   }
+        internal static string Format(string resourceFormat, object? p1)
+        {
+            if (UsingResourceKeys())
+            {
+                return string.Join(", ", resourceFormat, p1);
+            }
+
+            return string.Format(resourceFormat, p1);
+        }
+
+        internal static string Format(string resourceFormat, object? p1, object? p2)
+        {
+            if (UsingResourceKeys())
+            {
+                return string.Join(", ", resourceFormat, p1, p2);
+            }
+
+            return string.Format(resourceFormat, p1, p2);
+        }
+
+        internal static string Format(string resourceFormat, object? p1, object? p2, object? p3)
+        {
+            if (UsingResourceKeys())
+            {
+                return string.Join(", ", resourceFormat, p1, p2, p3);
+            }
+
+            return string.Format(resourceFormat, p1, p2, p3);
+        }
+
+        internal static string Format(string resourceFormat, params object?[]? args)
+        {
+            if (args != null)
+            {
+                if (UsingResourceKeys())
+                {
+                    return resourceFormat + ", " + string.Join(", ", args);
+                }
+
+                return string.Format(resourceFormat, args);
+            }
+
+            return resourceFormat;
+        }
+
+        internal static string Format(IFormatProvider? provider, string resourceFormat, object? p1)
+        {
+            if (UsingResourceKeys())
+            {
+                return string.Join(", ", resourceFormat, p1);
+            }
+
+            return string.Format(provider, resourceFormat, p1);
+        }
+
+        internal static string Format(IFormatProvider? provider, string resourceFormat, object? p1, object? p2)
+        {
+            if (UsingResourceKeys())
+            {
+                return string.Join(", ", resourceFormat, p1, p2);
+            }
+
+            return string.Format(provider, resourceFormat, p1, p2);
+        }
+
+        internal static string Format(IFormatProvider? provider, string resourceFormat, object? p1, object? p2, object? p3)
+        {
+            if (UsingResourceKeys())
+            {
+                return string.Join(", ", resourceFormat, p1, p2, p3);
+            }
+
+            return string.Format(provider, resourceFormat, p1, p2, p3);
+        }
+
+        internal static string Format(IFormatProvider? provider, string resourceFormat, params object?[]? args)
+        {
+            if (args != null)
+            {
+                if (UsingResourceKeys())
+                {
+                    return resourceFormat + ", " + string.Join(", ", args);
+                }
+
+                return string.Format(provider, resourceFormat, args);
+            }
+
+            return resourceFormat;
+        }
+    }
 }
