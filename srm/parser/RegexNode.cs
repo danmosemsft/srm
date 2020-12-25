@@ -176,21 +176,21 @@ namespace System.Text.RegularExpressions
 
         private void MakeLoopAtomic()
         {
-            switch (Type)
-            {
-                case Oneloop:
-                    Type = Oneloopatomic;
-                    break;
-                case Notoneloop:
-                    Type = Notoneloopatomic;
-                    break;
-                default:
-#if DEBUG
-                    Debug.Assert(Type == Setloop, $"Unexpected type: {TypeName}");
-#endif
-                    Type = Setloopatomic;
-                    break;
-            }
+//            switch (Type)
+//            {
+//                case Oneloop:
+//                    Type = Oneloopatomic;
+//                    break;
+//                case Notoneloop:
+//                    Type = Notoneloopatomic;
+//                    break;
+//                default:
+//#if DEBUG
+//                    Debug.Assert(Type == Setloop, $"Unexpected type: {TypeName}");
+//#endif
+//                    Type = Setloopatomic;
+//                    break;
+//            }
         }
 
 #if DEBUG
@@ -341,7 +341,7 @@ namespace System.Text.RegularExpressions
                                 RegexNode? parent = node.Next;
                                 if (parent != null && parent.Type == Concatenate)
                                 {
-                                    parent.InsertChild(1, new RegexNode(UpdateBumpalong, node.Options));
+                                    //parent.InsertChild(1, new RegexNode(UpdateBumpalong, node.Options));
                                 }
                                 break;
                         }
