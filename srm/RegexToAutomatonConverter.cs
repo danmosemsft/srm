@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Microsoft.SRM
@@ -92,7 +94,7 @@ namespace Microsoft.SRM
                 case RegexNode.Nothing:
                     return "Nothing";
                 case RegexNode.NonBoundary:
-                    return "Nonboundary";
+                    return "NonBoundary";
                 case RegexNode.NonECMABoundary:
                     return "NonECMABoundary";
                 case RegexNode.Atomic:
@@ -312,8 +314,9 @@ namespace Microsoft.SRM
         /// <param name="keepAnchors">if false (default) then anchors are replaced by equivalent regexes</param>
         public SymbolicRegexNode<S> ConvertToSymbolicRegex(string regex, RegexOptions options, bool keepAnchors = false)
         {
-            RegexTree tree = RegexParser.Parse(regex, options);
-            return ConvertToSymbolicRegex(tree._root, keepAnchors);
+            CultureInfo culture = (options & RegexOptions.CultureInvariant) != 0 ? CultureInfo.InvariantCulture : CultureInfo.CurrentCulture;
+            RegexTree tree = RegexParser.Parse(regex, options, culture);
+            return ConvertToSymbolicRegex(tree.Root, keepAnchors);
         }
 
         internal SymbolicRegexNode<S> ConvertToSymbolicRegex(RegexNode root, bool keepAnchors = false, bool unwindlowerbounds = false)
@@ -351,10 +354,10 @@ namespace Microsoft.SRM
 
         internal SymbolicRegexNode<S> ConvertNodeToSymbolicRegex(RegexNode node, bool topLevel)
         {
-            switch (node._type)
+            switch (node.Type)
             {
                 case RegexNode.Alternate:
-                    return this.srBuilder.MkOr(Array.ConvertAll(node._children.ToArray(), x => ConvertNodeToSymbolicRegex(x, topLevel)));
+                    return this.srBuilder.MkOr(Array.ConvertAll(node.Children.ToArray(), x => ConvertNodeToSymbolicRegex(x, topLevel)));
                 case RegexNode.Beginning:
                     return this.srBuilder.startAnchor;
                 case RegexNode.Bol:
@@ -362,7 +365,7 @@ namespace Microsoft.SRM
                 case RegexNode.Capture:  //paranthesis (...)
                     return ConvertNodeToSymbolicRegex(node.Child(0), topLevel);
                 case RegexNode.Concatenate:
-                    return this.srBuilder.MkConcat(Array.ConvertAll(node._children.ToArray(), x => ConvertNodeToSymbolicRegex(x, false)), topLevel);
+                    return this.srBuilder.MkConcat(Array.ConvertAll(node.Children.ToArray(), x => ConvertNodeToSymbolicRegex(x, false)), topLevel);
                 case RegexNode.Empty:
                     return this.srBuilder.epsilon;
                 case RegexNode.End:
@@ -371,9 +374,9 @@ namespace Microsoft.SRM
                 case RegexNode.Eol:
                     return this.srBuilder.eolAnchor;
                 case RegexNode.Loop:
-                    return this.srBuilder.MkLoop(ConvertNodeToSymbolicRegex(node._children[0], false), false, node._m, node._n);
+                    return this.srBuilder.MkLoop(ConvertNodeToSymbolicRegex(node.Child(0), false), false, node.M, node.N);
                 case RegexNode.Lazyloop:
-                    return this.srBuilder.MkLoop(ConvertNodeToSymbolicRegex(node._children[0], false), true, node._m, node._n);
+                    return this.srBuilder.MkLoop(ConvertNodeToSymbolicRegex(node.Child(0), false), true, node.M, node.N);
                 case RegexNode.Multi:
                     return ConvertNodeMultiToSymbolicRegex(node, topLevel);
                 case RegexNode.Notone:
@@ -395,17 +398,17 @@ namespace Microsoft.SRM
                 case RegexNode.Setlazy:
                     return ConvertNodeSetloopToSymbolicRegex(node, true);
                 case RegexNode.Testgroup:
-                    return MkIfThenElse(ConvertNodeToSymbolicRegex(node._children[0], false), ConvertNodeToSymbolicRegex(node._children[1], false), ConvertNodeToSymbolicRegex(node._children[2], false));
+                    return MkIfThenElse(ConvertNodeToSymbolicRegex(node.Child(0), false), ConvertNodeToSymbolicRegex(node.Child(1), false), ConvertNodeToSymbolicRegex(node.Child(2), false));
                 case RegexNode.ECMABoundary:
                 case RegexNode.Boundary:
                     throw new AutomataException(@"Not implemented: word-boundary \b");
-                case RegexNode.Nonboundary:
+                case RegexNode.NonBoundary:
                 case RegexNode.NonECMABoundary:
                     throw new AutomataException(@"Not implemented: non-word-boundary \B");
                 case RegexNode.Nothing:
                     throw new AutomataException(@"Not implemented: Nothing");
-                case RegexNode.Greedy:
-                    throw new AutomataException("Not implemented: greedy constructs (?>) (?<)");
+                case RegexNode.Atomic:
+                    throw new AutomataException("Not implemented: Atomic constructs (?>) (?<)");
                 case RegexNode.Start:
                     throw new AutomataException(@"Not implemented: \G");
                 case RegexNode.Group:
@@ -419,7 +422,7 @@ namespace Microsoft.SRM
                 case RegexNode.Ref:
                     throw new AutomataException(@"Not supported: references \1");
                 default:
-                    throw new AutomataException(@"Unexpected regex construct");
+                    throw new AutomataException($"Unexpected regex construct {node.Type}");
             }
         }
         
@@ -487,8 +490,8 @@ namespace Microsoft.SRM
         private SymbolicRegexNode<S> ConvertNodeMultiToSymbolicRegex(RegexNode node, bool topLevel)
         {
             //sequence of characters
-            string sequence = node._str;
-            bool ignoreCase = ((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
+            string sequence = node.Str;
+            bool ignoreCase = ((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
 
             S[] conds = Array.ConvertAll(sequence.ToCharArray(), c => solver.MkCharConstraint(c, ignoreCase));
             var seq = this.srBuilder.MkSequence(conds, topLevel);
@@ -496,25 +499,25 @@ namespace Microsoft.SRM
         }
 
         /// <summary>
-        /// Matches chacter any character except node._ch
+        /// Matches chacter any character except node.Ch
         /// </summary>
         private SymbolicRegexNode<S> ConvertNodeNotoneToSymbolicRegex(RegexNode node)
         {
-            bool ignoreCase = ((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
+            bool ignoreCase = ((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
 
-            S cond = solver.MkNot(solver.MkCharConstraint(node._ch, ignoreCase));
+            S cond = solver.MkNot(solver.MkCharConstraint(node.Ch, ignoreCase));
 
             return this.srBuilder.MkSingleton(cond);
         }
 
         /// <summary>
-        /// Matches only node._ch
+        /// Matches only node.Ch
         /// </summary>
         private SymbolicRegexNode<S> ConvertNodeOneToSymbolicRegex(RegexNode node)
         {
-            bool ignoreCase = ((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
+            bool ignoreCase = ((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
 
-            S cond = solver.MkCharConstraint(node._ch, ignoreCase);
+            S cond = solver.MkCharConstraint(node.Ch, ignoreCase);
 
             return this.srBuilder.MkSingleton(cond);
         }
@@ -525,42 +528,42 @@ namespace Microsoft.SRM
         private SymbolicRegexNode<S> ConvertNodeSetToSymbolicRegex(RegexNode node)
         {
             //ranges and categories are encoded in set
-            string set = node._str;
+            string set = node.Str;
 
-            S moveCond = CreateConditionFromSet((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0, set);
+            S moveCond = CreateConditionFromSet((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0, set);
 
             return this.srBuilder.MkSingleton(moveCond);
         }
 
         private SymbolicRegexNode<S> ConvertNodeNotoneloopToSymbolicRegex(RegexNode node, bool isLazy)
         {
-            bool ignoreCase = ((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
-            S cond = solver.MkNot(solver.MkCharConstraint(node._ch, ignoreCase));
+            bool ignoreCase = ((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
+            S cond = solver.MkNot(solver.MkCharConstraint(node.Ch, ignoreCase));
 
             SymbolicRegexNode<S> body = this.srBuilder.MkSingleton(cond);
-            SymbolicRegexNode<S> loop = this.srBuilder.MkLoop(body, isLazy, node._m, node._n);
+            SymbolicRegexNode<S> loop = this.srBuilder.MkLoop(body, isLazy, node.M, node.N);
             return loop;
         }
 
         private SymbolicRegexNode<S> ConvertNodeOneloopToSymbolicRegex(RegexNode node, bool isLazy)
         {
-            bool ignoreCase = ((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
-            S cond = solver.MkCharConstraint(node._ch, ignoreCase);
+            bool ignoreCase = ((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0);
+            S cond = solver.MkCharConstraint(node.Ch, ignoreCase);
 
             SymbolicRegexNode<S> body = this.srBuilder.MkSingleton(cond);
-            SymbolicRegexNode<S> loop = this.srBuilder.MkLoop(body, isLazy, node._m, node._n);
+            SymbolicRegexNode<S> loop = this.srBuilder.MkLoop(body, isLazy, node.M, node.N);
             return loop;
         }
 
         private SymbolicRegexNode<S> ConvertNodeSetloopToSymbolicRegex(RegexNode node, bool isLazy)
         {
             //ranges and categories are encoded in set
-            string set = node._str;
+            string set = node.Str;
 
-            S moveCond = CreateConditionFromSet((node._options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0, set);
+            S moveCond = CreateConditionFromSet((node.Options & System.Text.RegularExpressions.RegexOptions.IgnoreCase) != 0, set);
 
             SymbolicRegexNode<S> body = this.srBuilder.MkSingleton(moveCond);
-            SymbolicRegexNode<S> loop = this.srBuilder.MkLoop(body, isLazy, node._m, node._n);
+            SymbolicRegexNode<S> loop = this.srBuilder.MkLoop(body, isLazy, node.M, node.N);
             return loop;
         }
 

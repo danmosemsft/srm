@@ -105,7 +105,7 @@ namespace System.Text.RegularExpressions
 
         private const uint DefaultMaxRecursionDepth = 20; // arbitrary cut-off to avoid unbounded recursion
 
-        private object? Children;
+        private object? _children;
         public int Type { get; private set; }
         public string? Str { get; private set; }
         public char Ch { get; private set; }
@@ -158,7 +158,7 @@ namespace System.Text.RegularExpressions
         {
             if (UseOptionR() && Type == Concatenate && ChildCount() > 1)
             {
-                ((List<RegexNode>)Children!).Reverse();
+                ((List<RegexNode>)_children!).Reverse();
             }
 
             return this;
@@ -768,7 +768,7 @@ namespace System.Text.RegularExpressions
                 RegexNode at;
                 RegexNode prev;
 
-                List<RegexNode> children = (List<RegexNode>)Children!;
+                List<RegexNode> children = (List<RegexNode>)_children!;
                 for (i = 0, j = 0; i < children.Count; i++, j++)
                 {
                     at = children[i];
@@ -780,7 +780,7 @@ namespace System.Text.RegularExpressions
                     {
                         if (at.Type == Alternate)
                         {
-                            if (at.Children is List<RegexNode> atChildren)
+                            if (at._children is List<RegexNode> atChildren)
                             {
                                 for (int k = 0; k < atChildren.Count; k++)
                                 {
@@ -790,7 +790,7 @@ namespace System.Text.RegularExpressions
                             }
                             else
                             {
-                                RegexNode atChild = (RegexNode)at.Children!;
+                                RegexNode atChild = (RegexNode)at._children!;
                                 atChild.Next = this;
                                 children.Insert(i + 1, atChild);
                             }
@@ -885,8 +885,8 @@ namespace System.Text.RegularExpressions
                 // - All branches having the same options.
                 // - Text, rather than also trying to combine identical sets that start each branch.
 
-                Debug.Assert(Children is List<RegexNode>);
-                var children = (List<RegexNode>)Children;
+                Debug.Assert(_children is List<RegexNode>);
+                var children = (List<RegexNode>)_children;
                 Debug.Assert(children.Count >= 2);
 
                 // Only extract left-to-right prefixes.
@@ -1104,13 +1104,13 @@ namespace System.Text.RegularExpressions
         private void ReduceConcatenationWithAdjacentStrings()
         {
             Debug.Assert(Type == Concatenate);
-            Debug.Assert(Children is List<RegexNode>);
+            Debug.Assert(_children is List<RegexNode>);
 
             bool wasLastString = false;
             RegexOptions optionsLast = 0;
             int i, j;
 
-            List<RegexNode> children = (List<RegexNode>)Children!;
+            List<RegexNode> children = (List<RegexNode>)_children!;
             for (i = 0, j = 0; i < children.Count; i++, j++)
             {
                 RegexNode at = children[i];
@@ -1123,7 +1123,7 @@ namespace System.Text.RegularExpressions
                 if (at.Type == Concatenate &&
                     ((at.Options & RegexOptions.RightToLeft) == (Options & RegexOptions.RightToLeft)))
                 {
-                    if (at.Children is List<RegexNode> atChildren)
+                    if (at._children is List<RegexNode> atChildren)
                     {
                         for (int k = 0; k < atChildren.Count; k++)
                         {
@@ -1133,7 +1133,7 @@ namespace System.Text.RegularExpressions
                     }
                     else
                     {
-                        RegexNode atChild = (RegexNode)at.Children!;
+                        RegexNode atChild = (RegexNode)at._children!;
                         atChild.Next = this;
                         children.Insert(i + 1, atChild);
                     }
@@ -1191,9 +1191,9 @@ namespace System.Text.RegularExpressions
         private void ReduceConcatenationWithAdjacentLoops()
         {
             Debug.Assert(Type == Concatenate);
-            Debug.Assert(Children is List<RegexNode>);
+            Debug.Assert(_children is List<RegexNode>);
 
-            var children = (List<RegexNode>)Children!;
+            var children = (List<RegexNode>)_children!;
             int current = 0, next = 1, nextSave = 1;
 
             while (next < children.Count)
@@ -1315,9 +1315,9 @@ namespace System.Text.RegularExpressions
         {
             Debug.Assert(Type == Concatenate);
             Debug.Assert((Options & RegexOptions.RightToLeft) == 0);
-            Debug.Assert(Children is List<RegexNode>);
+            Debug.Assert(_children is List<RegexNode>);
 
-            var children = (List<RegexNode>)Children;
+            var children = (List<RegexNode>)_children;
             for (int i = 0; i < children.Count - 1; i++)
             {
                 ProcessNode(children[i], children[i + 1], DefaultMaxRecursionDepth);
@@ -1693,71 +1693,82 @@ namespace System.Text.RegularExpressions
             newChild = newChild.Reduce();
             newChild.Next = this; // in case Reduce returns a different node that needs to be reparented
 
-            if (Children is null)
+            if (_children is null)
             {
-                Children = newChild;
+                _children = newChild;
             }
-            else if (Children is RegexNode currentChild)
+            else if (_children is RegexNode currentChild)
             {
-                Children = new List<RegexNode>() { currentChild, newChild };
+                _children = new List<RegexNode>() { currentChild, newChild };
             }
             else
             {
-                ((List<RegexNode>)Children).Add(newChild);
+                ((List<RegexNode>)_children).Add(newChild);
             }
         }
 
         public void InsertChild(int index, RegexNode newChild)
         {
-            Debug.Assert(Children is List<RegexNode>);
+            Debug.Assert(_children is List<RegexNode>);
 
             newChild.Next = this; // so that the child can see its parent while being reduced
             newChild = newChild.Reduce();
             newChild.Next = this; // in case Reduce returns a different node that needs to be reparented
 
-            ((List<RegexNode>)Children).Insert(index, newChild);
+            ((List<RegexNode>)_children).Insert(index, newChild);
         }
 
         public void ReplaceChild(int index, RegexNode newChild)
         {
-            Debug.Assert(Children != null);
+            Debug.Assert(_children != null);
             Debug.Assert(index < ChildCount());
 
             newChild.Next = this;
-            if (Children is RegexNode)
+            if (_children is RegexNode)
             {
-                Children = newChild;
+                _children = newChild;
             }
             else
             {
-                ((List<RegexNode>)Children)[index] = newChild;
+                ((List<RegexNode>)_children)[index] = newChild;
             }
         }
 
         public RegexNode Child(int i)
         {
-            if (Children is RegexNode child)
+            if (_children is RegexNode child)
             {
                 return child;
             }
 
-            return ((List<RegexNode>)Children!)[i];
+            return ((List<RegexNode>)_children!)[i];
         }
 
         public int ChildCount()
         {
-            if (Children is null)
+            if (_children is null)
             {
                 return 0;
             }
 
-            if (Children is List<RegexNode> children)
+            if (_children is List<RegexNode> children)
             {
                 return children.Count;
             }
 
-            Debug.Assert(Children is RegexNode);
+            Debug.Assert(_children is RegexNode);
             return 1;
+        }
+
+        public IEnumerable<RegexNode> Children
+        {
+            get
+            {
+                for (int i = 0; i < ChildCount(); i++)
+                {
+                    yield return Child(i);
+                }
+            }
         }
 
 #if DEBUG
