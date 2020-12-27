@@ -38,7 +38,7 @@ namespace System.Text.RegularExpressions.Tests
                         //int gid = groupNums[i];
                         //Group group = m.Groups[i];
 
-                        result += $" Group[{i}]=";
+                        //result += $" Group[{i}]=";
                         //foreach (Capture cap in group.Captures)
                         {
                             result += $"({matches[0].Index},{matches[0].Length})";
