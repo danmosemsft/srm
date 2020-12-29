@@ -914,7 +914,7 @@ namespace Microsoft.SRM
                     i_end = i;
                 }
                 else
-                {
+                {   
                     //If A is lazy then there is no need to maximize length of end-position
                     if (AisLazy)
                     {

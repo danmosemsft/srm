@@ -100,6 +100,7 @@ namespace Microsoft.SRM
             handleEquivalentOption(IgnorePatternWhitespace, System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace);
             handleEquivalentOption(CultureInvariant, System.Text.RegularExpressions.RegexOptions.CultureInvariant);
             handleEquivalentOption(ECMAScript, System.Text.RegularExpressions.RegexOptions.ECMAScript);
+            handleEquivalentOption(Vectorize, (System.Text.RegularExpressions.RegexOptions)1024);
             ignoreOption(System.Text.RegularExpressions.RegexOptions.RightToLeft);
             ignoreOption(System.Text.RegularExpressions.RegexOptions.Compiled);
             ignoreOption(System.Text.RegularExpressions.RegexOptions.ExplicitCapture);
